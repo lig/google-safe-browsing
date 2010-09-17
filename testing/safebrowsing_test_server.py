@@ -35,6 +35,7 @@ test is complete or not.
 __author__ = 'gcasto@google.com (Garrett Casto)'
 
 import BaseHTTPServer
+import binascii
 import base64
 import cgi
 import hmac
@@ -82,7 +83,7 @@ def LoadData(filename):
   """
   global response_data_by_step
   global client_key
-  data_file = open(filename, 'r')
+  data_file = open(filename, 'rb')
   str_data = data_file.read()
   test_data = external_test_pb2.TestData()
   test_data.ParseFromString(str_data)
@@ -104,6 +105,7 @@ def LoadData(filename):
     hash_step_dict = {}
     for hash_request in step_data.Hashes:
       hash_step_dict[hash_request.HashPrefix] = (hash_request.ServerResponse,
+                                                 hash_request.Expression,
                                                  0)
     hash_data_by_step[step] = hash_step_dict
   print "Data Parsed"
@@ -122,12 +124,25 @@ def VerifyTestComplete():
              (step, len(step_list), step_list))
       complete = False
 
-  for (prefix, hash_step_dict) in hash_data_by_step.iteritems():
-    for (_, num_times_requested) in hash_step_dict.itervalues():
-      if ((enforce_caching and num_times_requested != 1) or
-          num_times_requested == 0):
+  for (step, hash_step_dict) in hash_data_by_step.iteritems():
+    for (prefix,
+         (response, expression, num_requests)) in hash_step_dict.iteritems():
+      if ((enforce_caching and num_requests != 1) or
+          num_requests == 0):
         print ("Hash prefix %s not requested the correct number of times"
-               "(%d requests)" % (prefix, num_times_requested))
+               "(%d requests). Requests originated because of expression"
+               " %s. Prefix is located in the following locations" %
+               (binascii.hexlify(prefix),
+                num_requests,
+                expression))
+        cur_index = 0
+        while cur_index < len(response):
+          end_header_index = response.find('\n', cur_index + 1)
+          header = response[cur_index:end_header_index]
+          (listname, chunk_num, hashdatalen) = header.split(":")
+          print "   List '%s' in add chunk num %d" % (listname, chunk_num)
+          cur_index = end_header_index + hashdatalen + 1
+
         complete = False
 
   # TODO(gcasto): Have a check here that verifies that the client doesn't
@@ -228,7 +243,7 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         # Reply with the correct response
         response += hash_data[0]
         # Remember that this hash has now been requested.
-        hashes_for_step[prefix] = (hash_data[0], hash_data[1] + 1)
+        hashes_for_step[prefix] = (hash_data[0], hash_data[1], hash_data[2] + 1)
 
     if not response:
       self.send_response(204)
