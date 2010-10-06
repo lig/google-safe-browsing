@@ -43,6 +43,8 @@ from optparse import OptionParser
 import re
 import sha
 import sys
+from threading import Timer
+import time
 import urlparse
 
 import external_test_pb2
@@ -51,6 +53,7 @@ DEFAULT_PORT = 40101
 DEFAULT_DATAFILE_LOCATION = "testing_input.dat"
 POST_DATA_KEY = "post_data"
 GETHASH_PATH = "/safebrowsing/gethash"
+RESET_PATH="/reset"
 DOWNLOADS_PATH = "/safebrowsing/downloads"
 TEST_COMPLETE_PATH = "/test_complete"
 DATABASE_VALIDATION_PATH = "/safebrowsing/verify_database"
@@ -64,6 +67,10 @@ client_key = ''
 enforce_caching = False
 validate_database = True
 server_port = -1
+datafile_location = ''
+
+def EndServer():
+  sys.exit(0)
 
 def CGIParamsToListOfTuples(cgi_params):
   return [(param.Name, param.Value) for param in cgi_params]
@@ -199,6 +206,11 @@ class RequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write('no')
     elif path == GETHASH_PATH:
       self.SynthesizeGethashResponse(step)
+    elif path == RESET_PATH:
+      LoadData(datafile_location)
+      self.send_response(200)
+      self.end_headers()
+      self.wfile.write('done')
     else:
       self.GetCannedResponse(path, params, step, is_post_request)
 
@@ -346,7 +358,6 @@ def SetupServer(datafile_location,
   server_port = port
   return BaseHTTPServer.HTTPServer(('', port), RequestHandler)
 
-
 if __name__ == '__main__':
   parser = OptionParser()
   parser.add_option("--datafile", dest="datafile_location",
@@ -362,10 +373,20 @@ if __name__ == '__main__':
                     action="store_false", default=True,
                     help="Whether to requires that the client makes verify "
                     "database requests or not.")
+  parser.add_option("--server_timeout_sec", dest="server_timeout_sec",
+                    type="int", default=600,
+                    help="How long to let the server run before shutting it "
+                    "down. If <=0, the server will never be down")
   (options, _) = parser.parse_args()
 
+  datafile_location = options.datafile_location
   server = SetupServer(options.datafile_location,
                        options.port,
                        options.enforce_caching,
                        options.validate_database)
+
+  if (options.server_timeout_sec > 0):
+    tm = Timer(options.server_timeout_sec, EndServer)
+    tm.start()
+
   server.serve_forever()
