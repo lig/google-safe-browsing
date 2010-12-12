@@ -26,7 +26,10 @@ import httplib
 import itertools
 import logging
 import re
-import sha
+try:
+    from hashlib import sha1 as sha
+except ImportError:
+    import sha
 import socket
 import StringIO
 import struct
