@@ -8,7 +8,7 @@ class DataStoreInterface(object):
     """
     Interface Class for Google Safe Browsing DataStore
     """
-    __meta__ = abc.ABCMeta
+    __metaclass__ = abc.ABCMeta
 
     # Value is a dict of listname:sblist.List.
     LISTS = 'lists'
