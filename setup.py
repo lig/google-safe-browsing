@@ -18,8 +18,6 @@ distribute_setup.use_setuptools()
 from setuptools import setup, find_packages
 
 
-print(find_packages())
-
 setup(
     name = 'googlesafebrowsing',
     version = '0.2.beta.git',
